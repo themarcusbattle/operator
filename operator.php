@@ -78,8 +78,7 @@
 	public function register_api_endpoints() {
 
 		register_rest_route( 'operator/v1', '/sms', array(
-			// 'methods' => array( 'GET', 'POST' ),
-			'methods' => array( 'GET' ),
+			'methods' => array( 'GET', 'POST' ),
 			'callback' => array( $this, 'capture_sms' ),
 			// 'permission_callback' => array( $this, 'validate_sync_key' ),
 		) );
