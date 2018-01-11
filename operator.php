@@ -135,7 +135,8 @@
 
 		// Capture all of the request parameters.
 		$message = $request->get_param( 'text' );
-		$from    = $request->get_param( 'from' );
+		$from    = str_replace( '+', '', $request->get_param( 'from' ) );
+		$to      = str_replace( '+', '', $request->get_param( 'to' ) );
 
 		$message_args = array(
 			'post_type'    => 'message',
@@ -146,7 +147,7 @@
 				'type'        => $request->get_param( 'eventType' ),
 				'direction'   => $request->get_param( 'direction' ),
 				'from_number' => $from,
-				'to_number'   => $request->get_param( 'to' ),
+				'to_number'   => $to,
 				'message_id'  => $request->get_param( 'messageId' ),
 				'message_uri' => $request->get_param( 'messageUri' ),
 				'status'      => $request->get_param( 'state' ),
@@ -155,7 +156,51 @@
 
 		$message_id = wp_insert_post( $message_args );
 
-		$this->forward_sms_to_phone( $from, $message );
+		if ( get_option( 'op_forwarding_number' ) === $from ) {
+			$this->reply_to_sms( $message );
+		} else {
+			$this->forward_sms_to_phone( $from, $message );
+		}
+	}
+
+	public function reply_to_sms( $message = '' ) {
+
+		if ( empty( $message ) ) {
+			return false;
+		}
+
+		$words = explode( ' ', $message );
+		$to    = absint( $words[0] );
+
+		if ( ! $to ) {
+			return false;
+		}
+
+		$message = str_replace( $to, '', $message );
+
+		$provider_account_id = get_option( 'op_provider_account_id' );
+		$provider_token      = get_option( 'op_provider_token' );
+		$provider_secret     = get_option( 'op_provider_secret' );
+		$phone_number        = get_option( 'op_phone_number' );
+		$url                 = "https://api.catapult.inetwork.com/v1/users/{$provider_account_id}/messages";
+
+		if ( ! $forwarding_number = get_option( 'op_forwarding_number' ) ) {
+			return false;
+		}
+
+		$response = wp_remote_post( $url, array(
+			'headers' => array(
+				'Authorization' => 'Basic ' . base64_encode( $provider_token . ':' . $provider_secret ),
+				'Content-type'  => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'from' => $phone_number,
+				'to'   => $to,
+				'text' => $message,
+			) ),
+		) );
+
+		return wp_remote_retrieve_body( $response );
 	}
 
 	public function forward_sms_to_phone( $from = '', $message = '' ) {
