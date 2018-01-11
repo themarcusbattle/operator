@@ -40,6 +40,7 @@
 
 		// Admin hooks.
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ), 10, 1 );
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
 	}
 
 	public function register_post_types() {
@@ -64,10 +65,50 @@
 				<form class="form" method="post" action="options.php">
 					<?php settings_fields( 'operator' ); ?>
 					<?php do_settings_sections( 'operator' ); ?>
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row">Provider Account ID</th>
+							<td>
+								<input type="text" name="op_provider_account_id" value="<?php echo esc_attr( get_option( 'op_provider_account_id' ) ); ?>" />
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row">Provider Token</th>
+							<td>
+								<input type="text" name="op_provider_token" value="<?php echo esc_attr( get_option( 'op_provider_token' ) ); ?>" />
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row">Provider Secret</th>
+							<td>
+								<input type="text" name="op_provider_secret" value="<?php echo esc_attr( get_option( 'op_provider_secret' ) ); ?>" />
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row">Phone Number</th>
+							<td>
+								<input type="text" name="op_phone_number" value="<?php echo esc_attr( get_option( 'op_phone_number' ) ); ?>" />
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row">Forwarding Number</th>
+							<td>
+								<input type="text" name="op_forwarding_number" value="<?php echo esc_attr( get_option( 'op_forwarding_number' ) ); ?>" />
+							</td>
+						</tr>
+					</table>
 					<?php submit_button(); ?>
 				</form>
 			</div>
 		<?php
+	}
+
+	public function register_settings() {
+		register_setting( 'operator', 'op_provider_account_id' );
+		register_setting( 'operator', 'op_provider_token' );
+		register_setting( 'operator', 'op_provider_secret' );
+		register_setting( 'operator', 'op_phone_number' );
+		register_setting( 'operator', 'op_forwarding_number' );
 	}
 
 	/**
@@ -93,15 +134,18 @@
 		}
 
 		// Capture all of the request parameters.
+		$message = $request->get_param( 'text' );
+		$from    = $request->get_param( 'from' );
+
 		$message_args = array(
 			'post_type'    => 'message',
 			'post_status'  => 'publish',
-			'post_content' => $request->get_param( 'text' ),
+			'post_content' => $message,
 			'post_date'    => $request->get_param( 'time' ),
 			'meta_input'   => array(
 				'type'        => $request->get_param( 'eventType' ),
 				'direction'   => $request->get_param( 'direction' ),
-				'from_number' => $request->get_param( 'from' ),
+				'from_number' => $from,
 				'to_number'   => $request->get_param( 'to' ),
 				'message_id'  => $request->get_param( 'messageId' ),
 				'message_uri' => $request->get_param( 'messageUri' ),
@@ -110,8 +154,37 @@
 		);
 
 		$message_id = wp_insert_post( $message_args );
-		
-		print_r( $message_id ); exit;
+
+		$this->forward_sms_to_phone( $from, $message );
+	}
+
+	public function forward_sms_to_phone( $from = '', $message = '' ) {
+
+		$provider_account_id = get_option( 'op_provider_account_id' );
+		$provider_token      = get_option( 'op_provider_token' );
+		$provider_secret     = get_option( 'op_provider_secret' );
+		$phone_number        = get_option( 'op_phone_number' );
+		$url                 = "https://api.catapult.inetwork.com/v1/users/{$provider_account_id}/messages";
+
+		if ( ! $forwarding_number = get_option( 'op_forwarding_number' ) ) {
+			return false;
+		}
+
+		$message = "$from: $message";
+
+		$response = wp_remote_post( $url, array(
+			'headers' => array(
+				'Authorization' => 'Basic ' . base64_encode( $provider_token . ':' . $provider_secret ),
+				'Content-type'  => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'from' => $phone_number,
+				'to'   => $forwarding_number,
+				'text' => $message,
+			) ),
+		) );
+
+		return wp_remote_retrieve_body( $response );
 	}
 }
 
