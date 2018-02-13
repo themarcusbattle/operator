@@ -142,7 +142,7 @@ class Nock_API {
 
 		// Create the subscriber if they don't exist.
 		if ( ! $subscriber_id ) {
-			$subscriber_id = $this->plugin->subscribers->create( $number );
+			$subscriber_id = $this->plugin->subscribers->create( $from, $account['id'] );
 		}
 
 		// Create the message.

@@ -21,7 +21,28 @@ class Nock_Subscriber {
 	public function __construct( $plugin ) {
 		$this->plugin = $plugin;
 		$this->hooks();
+		$this->install_db();
 		$this->install_message_subscribers_db();
+	}
+
+	public function install_db () {
+
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . 'nock_subscribers';
+
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			account_id mediumint(9) NOT NULL,
+			user_id mediumint(9) NOT NULL,
+			created datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+			PRIMARY KEY  (id)
+		) $charset_collate;";
+
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		dbDelta( $sql );
 	}
 
 	public function install_message_subscribers_db() {
@@ -104,7 +125,44 @@ class Nock_Subscriber {
 	 * @param Integer $account_id The account id.
 	 */
 	public function create( $number = '', $account_id = 0 ) {
-		echo 'awesome';
+
+		$user    = get_user_by( 'login', $number );
+		$user_id = isset( $user->ID ) ? $user->ID : null;
+
+		if ( $user_id ) {
+			update_user_meta( $user_id, 'mobile_number', $number );
+			return $user_id;
+		}
+
+		// Create the new user in WP.
+		$userdata = array(
+			'user_login' => $number,
+			'user_pass'  => null,
+		);
+
+		$user_id = wp_insert_user( $userdata );
+
+		if ( is_wp_error( $user_id ) ) {
+			return false;
+		}
+
+		global $wpdb;
+
+		$wpdb->insert(
+			$wpdb->prefix . 'nock_subscribers',
+			array(
+				'user_id'    => absint( $user_id ),
+				'account_id' => absint( $account_id ),
+			),
+			array(
+				'%d',
+				'%d',
+			)
+		);
+
+		update_user_meta( $user_id, 'mobile_number', $number );
+
+		return $wpdb->insert_id;
 	}
 
 	/**

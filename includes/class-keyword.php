@@ -21,6 +21,7 @@ class Nock_Keyword {
 	public function __construct( $plugin ) {
 		$this->plugin = $plugin;
 		$this->hooks();
+		$this->install_keywords_db();
 	}
 
 	/**
@@ -29,42 +30,56 @@ class Nock_Keyword {
 	 * @since 0.1.0
 	 */
 	public function hooks() {
-		add_action( 'init', array( $this, 'register_keyword_taxonomy' ) );
-		add_action( 'init', array( $this, 'register_keyword_post_type' ) );
+		add_action( 'admin_menu', array( $this, 'add_page' ), 10, 1 );
+	}
+
+	public function install_keywords_db() {
+
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . 'nock_keywords';
+
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			keyword mediumint(9) NOT NULL,
+			group_id mediumint(9) NOT NULL,
+			created datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+			PRIMARY KEY  (id)
+		) $charset_collate;";
+
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		dbDelta( $sql );
 	}
 
 	/**
-	 * Register the 'Keyword' taxonomy.
-	 *
-	 * @since 0.1.0
+	 * Initialize the 'Keywords' page.
 	 */
-	public function register_keyword_taxonomy() {
-
-		register_taxonomy(
-			'keyword',
-			'number',
-			array(
-				'label'        => __( 'Keywords' ),
-				'public'       => true,
-				'rewrite'      => array( 'slug' => 'keywords' ),
-				'hierarchical' => false,
-			)
+	public function add_page() {
+		add_submenu_page(
+			'nock',
+			__( 'Keywords', 'nock' ),
+			'Keywords',
+			'manage_options',
+			'keywords',
+			array( $this, 'show_page' )
 		);
 	}
 
-	/**
-	 * Register the 'Keyword' CPT.
-	 *
-	 * @since 0.1.0
-	 */
-	public function register_keyword_post_type() {
+	public function show_page() {
 
-		$args = array(
-			'public'    => true,
-			'label'     => 'Keywords',
-			'menu_icon' => 'dashicons-format-chat',
+		$data = apply_filters( 'nock_keywords', array() );
+
+		$columns = array(
+			'name'             => 'Keyword',
+			'group'            => 'Group',
+			'account'          => 'Account',
+			'subscriber_count' => 'Subscribers',
 		);
 
-		register_post_type( 'keyword', $args );
+		$race_table = new Nock_Data_Table( array( 'singular' => 'Keyword', 'plural' => 'Keywords' ), $columns, $this->plugin );
+		$race_table->prepare_items( $data );
+		$race_table->display();
 	}
 }

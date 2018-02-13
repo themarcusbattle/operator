@@ -99,7 +99,6 @@ class Nock {
 		$this->numbers     = new Nock_Number( $this );
 		$this->keywords    = new Nock_Keyword( $this );
 		$this->api         = new Nock_API( $this );
-		$this->users       = new Nock_User( $this );
 	}
 
 	/**
